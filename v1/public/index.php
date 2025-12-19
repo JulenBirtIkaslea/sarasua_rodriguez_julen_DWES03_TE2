@@ -1,117 +1,138 @@
 <?php
-require '../core/Router.php';
-require '../app/controllers/ProductoController.php';
+require_once __DIR__ . '/../core/Router.php';
+require_once __DIR__ . '/../app/controllers/ProductoController.php';
 
-$url = $_SERVER['QUERY_STRING'];
-echo 'URL= ' . $url . '<br>';
+/**
+ * Respuesta JSON estándar (Ejercicio 4 + 5)
+ */
+function respondJson(string $status, int $code, string $message, $data = null): void
+{
+    http_response_code($code);
+    header('Content-Type: application/json; charset=utf-8');
 
-$content = file_get_contents("php://input");
+    $payload = [
+        'status' => $status,
+        'code' => $code,
+        'message' => $message,
+    ];
 
-// 2. Video: Routing
-$router = new Router();
-
-// RUTAS PRODUCTO
-$router->add('/public/producto/get', array(
-    'controller' => 'ProductoController',
-    'action' => 'getAllProductos'
-));
-
-$router->add('/public/producto/get/{id}', array(
-    'controller' => 'ProductoController',
-    'action' => 'getProductoById'
-));
-
-$router->add('/public/producto/create', array(
-    'controller' => 'ProductoController',
-    'action' => 'createProducto'
-));
-
-$router->add('/public/producto/update/{id}', array(
-    'controller' => 'ProductoController',
-    'action' => 'updateProducto'
-));
-
-$router->add('/public/producto/delete/{id}', array(
-    'controller' => 'ProductoController',
-    'action' => 'deleteProducto'
-));
-
-
-//Partimos la URL en sus partes
-$urlParams = explode('/', $url);
-
-//Array que contendrá la información de la URL
-$urlArray = array(
-    'HTTP'       => $_SERVER['REQUEST_METHOD'],
-    'path'       => $url,
-    'controller' => '',
-    'action'     => '',
-    'params'     => ''
-);
-
-//Rellena el array con la información de la URL si existe y sino manda al controlador y acción por defecto
-if (!empty($urlParams[2])) {
-    $urlArray['controller'] = ucwords($urlParams[2]);
-
-    if (!empty($urlParams[3])) {
-        $urlArray['action'] = $urlParams[3];
-
-        if (!empty($urlParams[4])) {
-            $urlArray['params'] = $urlParams[4];
-        }
-    } else {
-        $urlArray['action'] = 'index';
+    if ($data !== null) {
+        $payload['data'] = $data;
     }
 
-} else {
-    $urlArray['controller'] = 'Home';
-    $urlArray['action'] = 'index';
+    echo json_encode($payload, JSON_UNESCAPED_UNICODE);
+    exit;
 }
 
+// ------------------------------------------------------------
+// Obtener path desde QUERY_STRING (por el .htaccess con QSA)
+// ------------------------------------------------------------
+$rawQuery = $_SERVER['QUERY_STRING'] ?? '';
+$path = explode('&', $rawQuery)[0];
+$path = trim($path);
 
-// Mostramos las rutas
-echo '<pre>';
-print_r($urlArray) . '<br>';
-echo '</pre>';
+if ($path === '') {
+    respondJson('success', 200, 'API running', ['version' => 'v1']);
+}
 
-//EXPLICA
-if ($router->matchRoutes($urlArray)) {
+if ($path[0] !== '/') {
+    $path = '/' . $path;
+}
 
-    // Verifica el método HTTP de la solicitud
-    $method = $_SERVER['REQUEST_METHOD'];
+// ------------------------------------------------------------
+// Router + rutas
+// ------------------------------------------------------------
+$router = new Router();
 
-    // Define los parámetros según el método HTTP
-    $params = [];
+$router->add('/public/producto/get', [
+    'controller' => 'ProductoController',
+    'action' => 'getAllProductos',
+    'method' => 'GET'
+]);
 
-    if ($method === 'GET') {
-        $params[] = intval($urlArray['params']) ?? null;
+$router->add('/public/producto/get/{id}', [
+    'controller' => 'ProductoController',
+    'action' => 'getProductoById',
+    'method' => 'GET'
+]);
 
-    } elseif ($method === 'POST') {
-        $json = file_get_contents('php://input');
-        $params[] = json_decode($json, true);
+$router->add('/public/producto/create', [
+    'controller' => 'ProductoController',
+    'action' => 'createProducto',
+    'method' => 'POST'
+]);
 
-    } elseif ($method === 'PUT') {
-        $id = intval($urlArray['params']) ?? null;
-        $json = file_get_contents('php://input');
-        $params[] = $id;
-        $params[] = json_decode($json, true);
+$router->add('/public/producto/update/{id}', [
+    'controller' => 'ProductoController',
+    'action' => 'updateProducto',
+    'method' => 'PUT'
+]);
 
-    } elseif ($method === 'DELETE') {
-        $params[] = intval($urlArray['params']) ?? null;
+$router->add('/public/producto/delete/{id}', [
+    'controller' => 'ProductoController',
+    'action' => 'deleteProducto',
+    'method' => 'DELETE'
+]);
+
+// ------------------------------------------------------------
+// Match de rutas (Ejercicio 5: URL no válida => 404)
+// ------------------------------------------------------------
+if (!$router->matchRoutes($path)) {
+    respondJson(
+        'error',
+        404,
+        'URL no válida: ruta no definida',
+        ['path' => $path]
+    );
+}
+
+$params = $router->getParams();
+
+// Método esperado vs actual
+$routeMethod = $params['method'] ?? null;
+$requestMethod = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+
+if ($routeMethod && strtoupper($requestMethod) !== strtoupper($routeMethod)) {
+    respondJson(
+        'error',
+        405,
+        "Método no permitido. Esperado $routeMethod, recibido $requestMethod",
+        ['path' => $path]
+    );
+}
+
+// Controller / Action
+$controllerName = $params['controller'] ?? null;
+$action = $params['action'] ?? null;
+$routeParams = $params['routeParams'] ?? [];
+
+if (!$controllerName || !$action) {
+    respondJson('error', 500, 'Ruta mal configurada (controller/action missing)');
+}
+
+if (!class_exists($controllerName)) {
+    respondJson('error', 500, "Controller '$controllerName' no encontrado");
+}
+
+$controller = new $controllerName();
+
+if (!method_exists($controller, $action)) {
+    respondJson('error', 500, "Action '$action' no encontrada en '$controllerName'");
+}
+
+// Ejecutar acción
+try {
+    $result = call_user_func_array([$controller, $action], array_values($routeParams));
+
+    if (!is_array($result) || !isset($result['status'], $result['code'], $result['message'])) {
+        respondJson('error', 500, 'Respuesta inválida del controller');
     }
 
-    $controller = $router->getParams()['controller'];
-    $action = $router->getParams()['action'];
+    http_response_code((int)$result['code']);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode($result, JSON_UNESCAPED_UNICODE);
+    exit;
 
-    $controller = new $controller;
-
-    if (method_exists($controller, $action)) {
-        // Invoca el método con los parámetros
-        $resp = call_user_func_array([$controller, $action], $params);
-    } else {
-        echo "No route found for URL '$url'";
-    }
-
-} else {
-    echo "No route found for URL '$url'";
+} catch (Throwable $e) {
+    respondJson('error', 500, 'Internal server error', ['error' => $e->getMessage()]);
 }

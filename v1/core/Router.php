@@ -1,27 +1,46 @@
 <?php
 
-class Router {
-    protected $routes = array();
-    protected $params = array();
+class Router
+{
+    protected array $routes = [];
+    protected array $params = [];
 
-    public function add($route, $params) {
+    public function add(string $route, array $params): void
+    {
         $this->routes[$route] = $params;
     }
 
-    public function getRoutes() {
+    public function getRoutes(): array
+    {
         return $this->routes;
     }
 
-    // Router con soporte para {id}
-    public function matchRoutes($url)
+    /**
+     * Match con soporte para {id} y otros params: /algo/{id}
+     * Guarda:
+     *  - controller, action, method
+     *  - routeParams (ej: ['id' => '12'])
+     */
+    public function matchRoutes(string $path): bool
     {
-        foreach ($this->routes as $route => $params)
-        {
-            $pattern = str_replace(['{id}', '/'], ['([0-9]+)', '\/'], $route);
-            $pattern = '/^' . $pattern . '$/';
+        foreach ($this->routes as $route => $params) {
 
-            if (preg_match($pattern, $url['path'])) {
+            // Convertir /public/producto/get/{id} a regex
+            $pattern = preg_replace('#\{([a-zA-Z_][a-zA-Z0-9_]*)\}#', '(?P<$1>[^/]+)', $route);
+            $pattern = '#^' . $pattern . '$#';
+
+            if (preg_match($pattern, $path, $matches)) {
+                $routeParams = [];
+
+                foreach ($matches as $key => $value) {
+                    if (is_string($key)) {
+                        $routeParams[$key] = $value;
+                    }
+                }
+
                 $this->params = $params;
+                $this->params['routeParams'] = $routeParams;
+
                 return true;
             }
         }
@@ -29,7 +48,8 @@ class Router {
         return false;
     }
 
-    public function getParams() {
+    public function getParams(): array
+    {
         return $this->params;
     }
 }
