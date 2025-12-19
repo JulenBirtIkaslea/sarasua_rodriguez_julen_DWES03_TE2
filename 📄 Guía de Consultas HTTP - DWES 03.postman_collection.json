@@ -1,0 +1,144 @@
+{
+	"info": {
+		"_postman_id": "1c846a50-9ddc-43bf-ba27-45ff27cf1d21",
+		"name": "📄 Guía de Consultas HTTP - DWES 03",
+		"description": "En este archivo de ejemplo encontrarás las consultas HTTP básicas necesarias para completar la Tarea Evaluativa 2 de la Unidad Didáctica 3 de DWES. El ejemplo está basado en una aplicación de **Blog Personal**, en la que podrás realizar operaciones CRUD sobre las publicaciones o posts de un blog.\n\n🔍 **¿Qué puedes hacer con este ejemplo?**  \nCon esta colección, podrás ejecutar las operaciones básicas de un sistema REST para gestionar posts en un blog. Entre las operaciones disponibles, encontrarás:\n\n1. **Recuperar la información de todos los posts**: Verás la lista completa de publicaciones en el blog.\n    \n2. **Consultar un post específico por su ID**: Obtendrás los detalles de una publicación concreta.\n    \n3. **Insertar un nuevo post**: Podrás añadir una nueva publicación al blog.\n    \n4. **Modificar un post existente**: Actualiza el contenido o título de una publicación.\n    \n5. **Eliminar un post**: Elimina un post del blog de forma definitiva.\n    \n\n🌟 **Estructura del Ejemplo**  \nCada operación de esta plantilla cuenta con instrucciones detalladas y ejemplos de cómo enviar y recibir los datos en formato JSON. Solo necesitas hacer clic en **Send** en cada solicitud para ejecutarla y ver los resultados en tiempo real.\n\n💡 **Consejo**: Usa el archivo para familiarizarte con las consultas que deberás implementar y personalizar en tu propio servicio en la tarea evaluativa. Cada solicitud incluye una descripción paso a paso para ayudarte a entender cómo funcionan las operaciones CRUD en una API RESTful.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "50945013",
+		"_collection_link": "https://jsarasua-f321b2e8-2067757.postman.co/workspace/Julen-Sarasua-Rodriguez's-Works~138e5af2-bb42-4e1a-8f10-c5bfb9e572c0/collection/50945013-1c846a50-9ddc-43bf-ba27-45ff27cf1d21?action=share&source=collection_link&creator=50945013"
+	},
+	"item": [
+		{
+			"name": "Paso 1: Obtener todos los Posts",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://ejemplo-blog-dwes/posts",
+					"protocol": "http",
+					"host": [
+						"ejemplo-blog-dwes"
+					],
+					"path": [
+						"posts"
+					]
+				},
+				"description": "Esta solicitud GET obtiene una lista de todos los posts disponibles en el sistema del blog.\n\n**Caso de uso:** Al pulsar enviar debería devolver la información de todos los posts disponibles"
+			},
+			"response": []
+		},
+		{
+			"name": "Paso 2: Obtener un Post por su ID",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "http://ejemplo-blog-dwes/posts/{{id}}",
+					"protocol": "http",
+					"host": [
+						"ejemplo-blog-dwes"
+					],
+					"path": [
+						"posts",
+						"{{id}}"
+					]
+				},
+				"description": "Esta solicitud GET obtendría un post específico basado en su ID.\n\n**Caso de uso:** Si se cambia el valor de `{{id}}` en la URL al ID del post que quieres consultar y debería devolver los detalles de ese post concreto."
+			},
+			"response": []
+		},
+		{
+			"name": "Paso 3: Crear un nuevo Post",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"title\": \"Título del nuevo post\",\n    \"content\": \"Contenido del nuevo post\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://ejemplo-blog-dwes/posts",
+					"protocol": "http",
+					"host": [
+						"ejemplo-blog-dwes"
+					],
+					"path": [
+						"posts"
+					]
+				},
+				"description": "Esta solicitud POST crearía un nuevo post en el blog.\n\n**Caso de uso:** En este caso, en el cuerpo de la solicitud se recibiría un JSON con los campos `title` y `content` que contendrían el titulo y el contenido del post que se quiere guardar"
+			},
+			"response": []
+		},
+		{
+			"name": "Paso 4: Actualizar un Post por su ID",
+			"request": {
+				"method": "PUT",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"title\": \"Título actualizado\",\n    \"content\": \"Contenido actualizado del post\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://ejemplo-blog-dwes/posts/{{id}}",
+					"protocol": "http",
+					"host": [
+						"ejemplo-blog-dwes"
+					],
+					"path": [
+						"posts",
+						"{{id}}"
+					]
+				},
+				"description": "Esta solicitud PUT actualiza un post existente en el blog basándose en su ID.\n\n**Caso de uso:** Si se cambia el valor de `{{id}}` al ID del post que quieres actualizar, editando `title` y `content` en el cuerpo de la solicitud con los valores nuevosse modificaría el contenido de ese post concreto"
+			},
+			"response": []
+		},
+		{
+			"name": "Paso 5: Eliminar un Post por su ID",
+			"request": {
+				"method": "DELETE",
+				"header": [],
+				"url": {
+					"raw": "http://ejemplo-blog-dwes/posts/{{id}}",
+					"protocol": "http",
+					"host": [
+						"ejemplo-blog-dwes"
+					],
+					"path": [
+						"posts",
+						"{{id}}"
+					]
+				},
+				"description": "Esta solicitud DELETE elimina un post específico del blog por su ID.\n\n**Caso de uso:** Si se cambia el valor de `{{id}}` al ID del post que quieres eliminar, este se eliminaría al recibir y procesar la solicitud"
+			},
+			"response": []
+		}
+	],
+	"variable": [
+		{
+			"key": "id",
+			"value": "1"
+		}
+	]
+}
