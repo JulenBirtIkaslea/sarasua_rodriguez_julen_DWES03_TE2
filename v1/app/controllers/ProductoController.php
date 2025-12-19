@@ -1,9 +1,10 @@
 <?php
 
 require_once __DIR__ . '/../utils/CsvDataHandler.php';
+require_once __DIR__ . '/../models/Producto.php'; // (puede quedarse, aunque no lo uses)
 
-class ProductoController
-{
+class ProductoController {
+
     private CsvDataHandler $db;
 
     public function __construct()
@@ -17,7 +18,7 @@ class ProductoController
         $resp = [
             'status' => 'success',
             'code' => $code,
-            'message' => $message,
+            'message' => $message
         ];
         if ($data !== null) $resp['data'] = $data;
         return $resp;
@@ -28,98 +29,112 @@ class ProductoController
         $resp = [
             'status' => 'error',
             'code' => $code,
-            'message' => $message,
+            'message' => $message
         ];
         if ($data !== null) $resp['data'] = $data;
         return $resp;
     }
 
-    private function readJsonBody(): array
-    {
-        $raw = file_get_contents('php://input');
-        if ($raw === false || trim($raw) === '') return [];
-
-        $decoded = json_decode($raw, true);
-        return is_array($decoded) ? $decoded : [];
-    }
-
-    // GET /public/producto/get
+    // GET ALL
     public function getAllProductos(): array
     {
-        $items = $this->db->readAllAsArrays();
-        return $this->ok(200, 'Listado de productos', $items);
+        $productos = $this->db->readAllAsArrays();
+        return $this->ok(200, 'Listado de productos', $productos);
     }
 
-    // GET /public/producto/get/{id}
+    // GET BY ID
     public function getProductoById($id): array
     {
         $id = (int)$id;
         if ($id <= 0) return $this->fail(400, 'ID inválido');
 
-        $item = $this->db->findById($id);
-        if ($item === null) return $this->fail(404, "Producto no encontrado (id=$id)");
+        $producto = $this->db->findById($id);
 
-        return $this->ok(200, 'Producto encontrado', $item);
+        if ($producto === null) {
+            return $this->fail(404, "Elemento no encontrado: producto no existe (id=$id)");
+        }
+
+        return $this->ok(200, 'Producto encontrado', $producto);
     }
 
-    // POST /public/producto/create
-    public function createProducto(): array
+    // POST (ID lo pone el usuario en el body)
+    public function createProducto($data): array
     {
-        $data = $this->readJsonBody();
-
-        if (!isset($data['id'])) return $this->fail(400, 'Falta el campo id');
-
-        $data['id'] = (int)$data['id'];
-        if ($data['id'] <= 0) return $this->fail(400, 'ID inválido');
-
-        if (!isset($data['nombre']) || trim((string)$data['nombre']) === '') {
-            return $this->fail(400, 'Falta el campo nombre');
+        if (!is_array($data)) {
+            return $this->fail(400, 'Body JSON inválido');
         }
 
-        $ok = $this->db->appendIfIdNotExists($data);
+        if (!isset($data['id'])) {
+            return $this->fail(400, "Falta el campo 'id'");
+        }
+
+        $producto = [
+            'id' => (int)$data['id'],
+            'nombre' => (string)($data['nombre'] ?? ''),
+            'categoria' => (string)($data['categoria'] ?? ''),
+            'talla' => (string)($data['talla'] ?? ''),
+            'color' => (string)($data['color'] ?? ''),
+            'precio' => isset($data['precio']) ? (float)$data['precio'] : 0.0,
+            'stock' => isset($data['stock']) ? (int)$data['stock'] : 0
+        ];
+
+        if ($producto['id'] <= 0) return $this->fail(400, 'ID inválido');
+        if (trim($producto['nombre']) === '') return $this->fail(400, "Falta el campo 'nombre'");
+
+        $ok = $this->db->appendIfIdNotExists($producto);
 
         if (!$ok) {
-            return $this->fail(409, "No se ha podido crear: id duplicado o inválido (id={$data['id']})");
+            return $this->fail(409, "No se ha podido crear: id duplicado o inválido (id={$producto['id']})");
         }
 
-        $created = $this->db->findById($data['id']);
+        $created = $this->db->findById($producto['id']);
         return $this->ok(201, 'Producto creado', $created);
     }
 
-    // PUT /public/producto/update/{id}
-    // Ejercicio 5: si el ID no existe -> 404 con mensaje de error
-    public function updateProducto($id): array
+    // PUT (actualiza por ID de la URL; si viene id en body, debe coincidir)
+    // Ejercicio 5: ID inexistente -> 404 JSON
+    public function updateProducto($id, $data): array
     {
-        $id = (int)$id;
-        if ($id <= 0) return $this->fail(400, 'ID inválido');
+        $idUrl = (int)$id;
+        if ($idUrl <= 0) return $this->fail(400, 'ID inválido');
 
-        $data = $this->readJsonBody();
-        if (empty($data)) {
-            return $this->fail(400, 'Body JSON vacío o inválido');
+        if (!is_array($data)) {
+            return $this->fail(400, 'Body JSON inválido');
         }
 
-        $ok = $this->db->updateById($id, $data);
+        if (isset($data['id']) && (int)$data['id'] !== $idUrl) {
+            return $this->fail(400, "El 'id' del body no coincide con el id de la URL (url=$idUrl)");
+        }
+
+        unset($data['id']); // no permitir cambiar id
+
+        $ok = $this->db->updateById($idUrl, $data);
 
         if (!$ok) {
-            // ✅ Elemento no encontrado
-            return $this->fail(404, "No se puede actualizar: producto no encontrado (id=$id)");
+            // ✅ Elemento no encontrado (Ejercicio 5)
+            return $this->fail(404, "Elemento no encontrado: no se puede actualizar (id=$idUrl)");
         }
 
-        $updated = $this->db->findById($id);
+        $updated = $this->db->findById($idUrl);
         return $this->ok(200, 'Producto actualizado', $updated);
     }
 
-    // DELETE /public/producto/delete/{id}
+    // DELETE
     public function deleteProducto($id): array
     {
-        $id = (int)$id;
-        if ($id <= 0) return $this->fail(400, 'ID inválido');
+        $idUrl = (int)$id;
+        if ($idUrl <= 0) return $this->fail(400, 'ID inválido');
 
-        $existing = $this->db->findById($id);
-        if ($existing === null) return $this->fail(404, "Producto no encontrado (id=$id)");
+        $existing = $this->db->findById($idUrl);
+        if ($existing === null) {
+            return $this->fail(404, "Elemento no encontrado: no se puede borrar (id=$idUrl)");
+        }
 
-        $ok = $this->db->deleteById($id);
-        if (!$ok) return $this->fail(500, 'No se ha podido borrar el producto');
+        $ok = $this->db->deleteById($idUrl);
+
+        if (!$ok) {
+            return $this->fail(500, 'No se ha podido borrar el producto');
+        }
 
         return $this->ok(200, 'Producto borrado', $existing);
     }

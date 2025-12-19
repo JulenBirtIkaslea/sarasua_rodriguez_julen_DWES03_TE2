@@ -15,12 +15,9 @@ class Router
         return $this->routes;
     }
 
-    /**
-     * Match con soporte para {id} y otros params: /algo/{id}
-     * Guarda:
-     *  - controller, action, method
-     *  - routeParams (ej: ['id' => '12'])
-     */
+    /*
+      Match con soporte para {id} y otros params: /algo/{id}
+    */
     public function matchRoutes(string $path): bool
     {
         foreach ($this->routes as $route => $params) {
