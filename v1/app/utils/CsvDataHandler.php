@@ -2,189 +2,201 @@
 
 class CsvDataHandler
 {
+    // Ruta al fichero CSV donde se guardan los datos
     private string $csvFile;
 
-    // Cabecera fija (orden consistente)
-    private array $headers = ['id', 'nombre', 'categoria', 'talla', 'color', 'precio', 'stock'];
-
+    // Separador del CSV (usamos ; como en clase)
     private string $delimiter = ';';
 
+    /**
+     * Constructor
+     * Recibe la ruta del fichero CSV y se asegura de que existe
+     * Si el fichero no existe o está vacío, crea la cabecera
+     */
     public function __construct(string $csvFile)
     {
         $this->csvFile = $csvFile;
 
-        if (!file_exists($this->csvFile)) {
-            $this->ensureDirectoryExists(dirname($this->csvFile));
-            $this->writeHeader();
-        } else {
-            if (filesize($this->csvFile) === 0) {
-                $this->writeHeader();
+        // Si el fichero no existe o está vacío, lo inicializamos
+        if (!file_exists($this->csvFile) || filesize($this->csvFile) === 0) {
+
+            // Creamos la carpeta si no existe
+            $dir = dirname($this->csvFile);
+            if (!is_dir($dir)) {
+                mkdir($dir, 0777, true);
             }
+
+            // Creamos el fichero y escribimos la cabecera
+            $h = fopen($this->csvFile, 'w');
+
+            // Cabecera mínima del CSV (columnas del producto)
+            fputcsv(
+                $h,
+                ['id', 'nombre', 'categoria', 'talla', 'color', 'precio', 'stock'],
+                $this->delimiter
+            );
+
+            fclose($h);
         }
     }
 
+    /**
+     * Lee todo el contenido del CSV y lo devuelve como array de arrays
+     */
     public function readAllAsArrays(): array
     {
-        $handle = fopen($this->csvFile, 'r');
-        if ($handle === false) return [];
+        $h = fopen($this->csvFile, 'r');
+        if (!$h) return [];
 
-        $headers = fgetcsv($handle, 0, $this->delimiter);
-        if (!is_array($headers) || count($headers) === 0) {
-            fclose($handle);
+        // Leemos la cabecera para usarla como claves
+        $headers = fgetcsv($h, 0, $this->delimiter);
+        if (!$headers) {
+            fclose($h);
             return [];
         }
 
         $items = [];
 
-        while (($row = fgetcsv($handle, 0, $this->delimiter)) !== false) {
-            if (count($row) === 1 && trim((string)$row[0]) === '') {
-                continue;
-            }
-
-            $row = array_slice(array_pad($row, count($headers), ''), 0, count($headers));
-
-            $data = array_combine($headers, $row);
-            if (!is_array($data)) continue;
-
-            $items[] = $this->normalizeRow($data);
+        // Leemos cada fila y la convertimos en array asociativo
+        while (($row = fgetcsv($h, 0, $this->delimiter)) !== false) {
+            $items[] = array_combine($headers, $row);
         }
 
-        fclose($handle);
+        fclose($h);
         return $items;
     }
 
+    /**
+     * Busca un elemento por su ID
+     * Devuelve el array si existe o null si no
+     */
     public function findById(int $id): ?array
     {
         foreach ($this->readAllAsArrays() as $item) {
-            if ((int)($item['id'] ?? -1) === $id) return $item;
+            if ((int)$item['id'] === $id) {
+                return $item;
+            }
         }
         return null;
     }
 
+    /**
+     * Añade un producto al CSV si el ID no existe
+     * Devuelve true si se inserta, false si hay error o ID duplicado
+     */
     public function appendIfIdNotExists(array $producto): bool
     {
-        $id = isset($producto['id']) ? (int)$producto['id'] : -1;
+        $id = isset($producto['id']) ? (int)$producto['id'] : 0;
         if ($id <= 0) return false;
 
+        // Comprobamos que el ID no esté ya en el CSV
         if ($this->findById($id) !== null) return false;
 
-        $handle = fopen($this->csvFile, 'a');
-        if ($handle === false) return false;
-
-        // Completar con cabecera fija
-        $rowAssoc = [];
-        foreach ($this->headers as $h) {
-            $rowAssoc[$h] = $producto[$h] ?? '';
-        }
-
-        $rowAssoc = $this->normalizeRow($rowAssoc);
-
-        $csvRow = [
-            (string)(int)$rowAssoc['id'],
-            (string)$rowAssoc['nombre'],
-            (string)$rowAssoc['categoria'],
-            (string)$rowAssoc['talla'],
-            (string)$rowAssoc['color'],
-            (string)(float)$rowAssoc['precio'],
-            (string)(int)$rowAssoc['stock'],
+        // Preparamos la fila asegurando todas las columnas
+        $row = [
+            $id,
+            $producto['nombre'] ?? '',
+            $producto['categoria'] ?? '',
+            $producto['talla'] ?? '',
+            $producto['color'] ?? '',
+            $producto['precio'] ?? '',
+            $producto['stock'] ?? ''
         ];
 
-        fputcsv($handle, $csvRow, $this->delimiter);
-        fclose($handle);
+        // Abrimos el fichero en modo añadir
+        $h = fopen($this->csvFile, 'a');
+        if (!$h) return false;
+
+        fputcsv($h, $row, $this->delimiter);
+        fclose($h);
 
         return true;
     }
 
+    /**
+     * Actualiza un producto por ID
+     * Devuelve false si el ID no existe
+     */
     public function updateById(int $id, array $data): bool
     {
+        // Leemos todos los elementos
         $items = $this->readAllAsArrays();
-        $updated = false;
+        $found = false;
 
+        // Buscamos el producto por ID
         for ($i = 0; $i < count($items); $i++) {
-            if ((int)($items[$i]['id'] ?? -1) === $id) {
-                unset($data['id']); // no permitir cambiar id
-                $items[$i] = $this->normalizeRow(array_merge($items[$i], $data));
-                $updated = true;
+            if ((int)$items[$i]['id'] === $id) {
+
+                // No permitimos cambiar el ID
+                unset($data['id']);
+
+                // Actualizamos solo los campos enviados
+                $items[$i] = array_merge($items[$i], $data);
+                $found = true;
                 break;
             }
         }
 
-        if ($updated) $this->overwrite($items);
+        // Si no se encuentra el ID, no se actualiza nada
+        if (!$found) return false;
 
-        return $updated;
+        // Reescribimos el CSV completo
+        $this->overwrite($items);
+        return true;
     }
 
+    /**
+     * Borra un producto por ID
+     * Devuelve false si el ID no existe
+     */
     public function deleteById(int $id): bool
     {
         $items = $this->readAllAsArrays();
         $before = count($items);
 
-        $items = array_values(array_filter(
-            $items,
-            fn($row) => (int)($row['id'] ?? -1) !== $id
-        ));
+        // Eliminamos el elemento con ese ID
+        $items = array_values(
+            array_filter($items, fn($row) => (int)$row['id'] !== $id)
+        );
 
+        // Si no cambia el número de elementos, el ID no existía
         if (count($items) === $before) return false;
 
+        // Reescribimos el CSV
         $this->overwrite($items);
         return true;
     }
 
+    /**
+     * Sobrescribe el CSV completo (cabecera + datos)
+     * Se usa en update y delete
+     */
     private function overwrite(array $items): void
     {
-        $handle = fopen($this->csvFile, 'w');
-        if ($handle === false) {
-            die('No se ha podido abrir el fichero CSV para sobrescritura');
-        }
+        $h = fopen($this->csvFile, 'w');
+        if (!$h) return;
 
-        fputcsv($handle, $this->headers, $this->delimiter);
+        // Escribimos la cabecera
+        fputcsv(
+            $h,
+            ['id', 'nombre', 'categoria', 'talla', 'color', 'precio', 'stock'],
+            $this->delimiter
+        );
 
+        // Escribimos cada fila
         foreach ($items as $item) {
-            $item = $this->normalizeRow($item);
-
             $row = [
-                (string)(int)$item['id'],
-                (string)$item['nombre'],
-                (string)$item['categoria'],
-                (string)$item['talla'],
-                (string)$item['color'],
-                (string)(float)$item['precio'],
-                (string)(int)$item['stock'],
+                $item['id'] ?? '',
+                $item['nombre'] ?? '',
+                $item['categoria'] ?? '',
+                $item['talla'] ?? '',
+                $item['color'] ?? '',
+                $item['precio'] ?? '',
+                $item['stock'] ?? ''
             ];
-
-            fputcsv($handle, $row, $this->delimiter);
+            fputcsv($h, $row, $this->delimiter);
         }
 
-        fclose($handle);
-    }
-
-    private function writeHeader(): void
-    {
-        $handle = fopen($this->csvFile, 'w');
-        if ($handle === false) {
-            die('No se ha podido crear el fichero CSV');
-        }
-        fputcsv($handle, $this->headers, $this->delimiter);
-        fclose($handle);
-    }
-
-    private function normalizeRow(array $row): array
-    {
-        $row['id'] = isset($row['id']) ? (int)$row['id'] : 0;
-        $row['nombre'] = (string)($row['nombre'] ?? '');
-        $row['categoria'] = (string)($row['categoria'] ?? '');
-        $row['talla'] = (string)($row['talla'] ?? '');
-        $row['color'] = (string)($row['color'] ?? '');
-        $row['precio'] = isset($row['precio']) ? (float)$row['precio'] : 0.0;
-        $row['stock'] = isset($row['stock']) ? (int)$row['stock'] : 0;
-
-        return $row;
-    }
-
-    private function ensureDirectoryExists(string $dir): void
-    {
-        if (!is_dir($dir)) {
-            mkdir($dir, 0777, true);
-        }
+        fclose($h);
     }
 }
